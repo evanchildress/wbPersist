@@ -1,11 +1,14 @@
 library(dplyr)
 library(data.table)
+library(getWBData)
+library(Rcpp)
 
 nRivers<-4
 nStages<-2
 nYears<-20
 nTimes<-365*nYears
 nSamples<-nYears*4
+season<-rep(c(3,4,1,2),nYears)
 
 sampleTimes<-round(seq(1,nTimes,length.out=nSamples))
 
@@ -67,12 +70,12 @@ dailyLogitPhi<-array(dim=c(nTimes,nRivers,nStages)) #time,river,stage
 for(r in 1:nRivers){
   for(s in 1:nStages){
     dailyLogitPhi[,r,s]<-phiBeta[1,r,s] +
-                         phiBeta[2,r,s]*flow[,r] +
-                         phiBeta[3,r,s]*temp[,r] +
-                         phiBeta[4,r,s]*temp[,r]*flow[,r]
+                         phiBeta[2,r,s]*dailyFlow[,r] +
+                         phiBeta[3,r,s]*dailyTemp[,r] +
+                         phiBeta[4,r,s]*dailyTemp[,r]*dailyFlow[,r]
   }
 }
-sourceCpp("src/survive.cpp")
+
 envLogitPhi<-array(dim=c(nSamples,nRivers,nStages))
 for(r in 1:nRivers){
   for(g in 1:nStages){
@@ -82,20 +85,17 @@ for(r in 1:nRivers){
   }
 }
 
-#get surival by combining daily predictions with size effect
-survive<-function(sample,river,stage,forkLength){
-    logitSeasonalPhi<-envLogitPhi[sample,river,stage]+phiBeta[5,river,stage]*forkLength
-  return(plogis(logitSeasonalPhi))
-}
-
-
-
-
 growthPerformance<-array(dim=c(nSamples,nRivers))
 for(r in 1:nRivers){
   for(s in 1:nSamples){
     
   }
+}
+
+stageTransition<-function(stage,season){
+  out<-rep(2,length(stage))
+  out[which(stage==1 & season %in% c(3,4,1))]<-1
+  return(out)
 }
 
 #parameters from growth model
@@ -108,7 +108,35 @@ list(tOpt=c(13,13,13,13),
      beta4=c(-0.05,-0.05,-0.05,-0.05),
      eps=c(0.00049,0.00049,0.00049,0.00049))
 
-grow<-function(forkLength)
+grow<-function(forkLength){
+  return(forkLength+20)
+}
+
+moveProb<-array(c(1,0,0,0,
+                  0,1,0,0,
+                  0,0,1,0,
+                  0,0,0,1,
+                  1,0,0,0,
+                  0,1,0,0,
+                  0,0,1,0,
+                  0,0,0,1,
+                  1,0,0,0,
+                  0,1,0,0,
+                  0,0,1,0,
+                  0,0,0,1,
+                  1,0,0,0,
+                  0,1,0,0,
+                  0,0,1,0,
+                  0,0,0,1),
+                dim=c(4,nRivers,nRivers))
+move<-function(moveProb){
+  to<-matrix(ncol=ncol(moveProb),nrow=nrow(moveProb))
+  for(i in 1:nrow(to)){
+    to[i,]<-rmultinom(1,1,moveProb[i,])
+  }
+  out<-apply(to,1,function(x){which(x==1)})
+  return(out)
+}
 
 #
 core<-createCoreData() %>%
@@ -116,18 +144,51 @@ core<-createCoreData() %>%
       filter(species=="bkt") %>%
       addSampleProperties() %>%
       data.table()
-S<-L<-R<-G<-array(dim=c(100000,nSamples))
+A<-L<-R<-G<-array(dim=c(100000,nSamples))
 initN<-rpois(1,1000)
+maxIndexAlive<-initN
+
 stageAge<-sample(1:nrow(core[river=="west brook"&season==3&!is.na(observedLength)]),
                  initN)
+#who is alive?
+A[1:initN,1]<-1
 
-S[1:initN,1]<-1
+#size
 L[1:initN,1]<-core[river=="west brook"&season==3&!is.na(observedLength)] %>%
                 .[stageAge,observedLength]
+
+#stage
 G[1:initN,1]<-core[river=="west brook"&season==3&!is.na(observedLength)] %>%
   .[stageAge,ifelse(cohort==year,1,2)]
+
+#location
 R[1:initN,1]<-1
 
-alive<-which(S[,1]==1)
+alive<-which(A[,1]==1)
 
 phi<-survive(R[alive,1],G[alive,1],L[alive,1],phiBeta[5,,],envLogitPhi[1,,])
+
+i<-2
+#who survives?
+S[alive,i]<-rbinom(length(S[alive,i-1]),1,phi)
+
+#grow, change stages, and move, if you survived
+alive<-which(S[,i]==1)
+
+L[alive,i]<-grow(L[alive,i-1])
+G[alive,i]<-stageTransition(G[alive,i-1],season[i-1])
+
+R[alive,i]<-move(getMoveProb(R[alive,i-1],moveProb[,,season[i-1]]))
+
+#reproduce if it's the right season
+eggPhi<-c(0.05,0.05,0.05,0.05) #need to get the YOY model going for this
+
+if(season[i-1]==2){
+  eggs<-rep(as.integer(NA),4)
+  for(r in 1:nRivers){
+    eggs[r]<-sum(spawn(L[alive,i-1][R[alive,i-1]==r]))
+  }
+  nYoy<-rbinom(nRivers,eggs,eggPhi)
+}
+
+#need to add the right number of YOY to the bottom of A and loop
