@@ -1,7 +1,4 @@
-library(dplyr)
-library(data.table)
-library(getWBData)
-library(Rcpp)
+library(wbPersist)
 
 nRivers<-4
 nStages<-2
@@ -10,11 +7,13 @@ nDays<-365*nYears
 nSamples<-nYears*4
 season<-rep(c(3,4,1,2),nYears)
 
-
+########################################################################
+#load in (or make up data)
+########################################################################
 sampleDays<-round(seq(1,nDays,length.out=nSamples))
 sampleHours<-round(seq(1,nDays*24,length.out=nSamples))
 #river specific daily environmental variables
-hourlyTemp<-rnorm(nDays*24,0,1) %>%
+hourlyTemp<-runif(nDays*24,8,15) %>%
   cbind(.,.,.,.) %>%
   data.table() %>%
   .[,day:=rep(1:nDays,each=24)] %>%
@@ -46,6 +45,10 @@ seasonalFlow<-dailyFlow[,.(mean(wb),
 hourlyTemp<-as.matrix(hourlyTemp[,.(wb,jimmy,mitchell,obear)])
 dailyFlow<-as.matrix(dailyFlow[,.(wb,jimmy,mitchell,obear)])
 
+#################################################################################
+#load in (or make up) parameters for surival, movement, growth, and reproduction
+#################################################################################
+
 #betas from survival model
 phiBeta<-array( c(6,-1,-1,1,-1/60,
                   6,-1,-1,1,-1/60,
@@ -56,38 +59,6 @@ phiBeta<-array( c(6,-1,-1,1,-1/60,
                   6,-1,-1,1,-1/60,
                   6,-1,-1,1,-1/60),
                 dim=c(5,4,2))
-
-
-#create array of predicted daily logit survival based only on flow and temp
-dailyLogitPhi<-array(dim=c(nDays,nRivers,nStages)) #time,river,stage
-for(r in 1:nRivers){
-  for(s in 1:nStages){
-    dailyLogitPhi[,r,s]<-phiBeta[1,r,s] +
-                         phiBeta[2,r,s]*dailyFlow[,r] +
-                         phiBeta[3,r,s]*dailyTemp[,r] +
-                         phiBeta[4,r,s]*dailyTemp[,r]*dailyFlow[,r]
-  }
-}
-
-envLogitPhi<-array(dim=c(nSamples,nRivers,nStages))
-for(r in 1:nRivers){
-  for(g in 1:nStages){
-    for(s in 1:nSamples){
-      envLogitPhi[s,r,g]<-prod(plogis(dailyLogitPhi[sampleDays[s]:(sampleDays[s]-1)]))
-    }
-  }
-}
-
-
-
-stageTransition<-function(stage,season){
-  out<-rep(2,length(stage))
-  out[which(stage==1 & season %in% c(3,4,1))]<-1
-  return(out)
-}
-
-
-
 
 
 #parameters from growth model
@@ -102,32 +73,36 @@ growthPars<-list(tOpt=c(13,13,13,13),
      eps=c(0.00049,0.00049,0.00049,0.00049))
 
 
-
-moveProb<-array(c(1,0,0,0,
-                  0,1,0,0,
-                  0,0,1,0,
-                  0,0,0,1,
-                  1,0,0,0,
-                  0,1,0,0,
-                  0,0,1,0,
-                  0,0,0,1,
-                  1,0,0,0,
-                  0,1,0,0,
-                  0,0,1,0,
-                  0,0,0,1,
-                  1,0,0,0,
-                  0,1,0,0,
-                  0,0,1,0,
-                  0,0,0,1),
-                dim=c(4,nRivers,nRivers))
+#movement probabilities from Letcher et al. 2014
+moveProb<-movementProbs
 
 
 #
-core<-createCoreData() %>%
-      addTagProperties() %>%
-      filter(species=="bkt") %>%
-      addSampleProperties() %>%
-      data.table()
+# core<-createCoreData() %>%
+#       addTagProperties() %>%
+#       filter(species=="bkt") %>%
+#       addSampleProperties() %>%
+#       data.table()
+
+core<-data.table(river="west brook",season=3,
+                 observedLength=runif(1000,60,200)) %>%
+      .[,cohort:=ifelse(observedLength<95,1,2)] %>%
+      .[,year:=1]
+
+##################################################################
+#create structures that contain predictions that do not depend on individual traits
+##################################################################
+
+envLogitPhi<-getEnvLogitPhi(nSamples,nDays,sampleDays,phiBeta)
+growthPerformance<-getGrowthPerformance(sampleHours,
+                                        hourlyTemp,
+                                        nRivers,
+                                        growthPars)
+
+################################################################
+#run simulations
+################################################################
+
 
 #set up data structures
 A<-L<-R<-G<-array(dim=c(100000,nSamples))
@@ -135,7 +110,7 @@ initN<-rpois(1,1000)
 maxIndexAlive<-initN
 
 stageAge<-sample(1:nrow(core[river=="west brook"&season==3&!is.na(observedLength)]),
-                 initN)
+                 initN,replace=T)
 #Intialize the first year
 #who is alive?
 A[1:initN,1]<-1
@@ -162,7 +137,9 @@ A[alive,i]<-rbinom(length(alive),1,phi)
 #grow, change stages, and move, if you survived
 alive<-which(A[,i]==1)
 if(length(alive)==0) break
-L[alive,i]<-grow(L[alive,i-1])
+L[alive,i]<-grow(growthPars$betas,R[alive,i-1],L[alive,i-1],
+                 seasonalFlow[i-1,],rep(0,length(alive)),
+                 growthPerformance[i-1,])
 G[alive,i]<-stageTransition(G[alive,i-1],season[i-1])
 
 R[alive,i]<-move(getMoveProb(R[alive,i-1],moveProb[,,season[i-1]]))
