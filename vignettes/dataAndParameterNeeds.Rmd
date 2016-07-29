@@ -1,0 +1,76 @@
+---
+title: "Data and Parameter Inputs"
+author: "Evan Childress"
+date: "July 29, 2016"
+output: html_document
+---
+
+##Model Components
+
+###1. Growth
+####Parameters
+
+    tOpt
+    ctMax
+    sigma
+    beta1 (intercept)
+    beta2 (startLength)
+    beta3 (flow)
+    beta4 (bkt biomass)
+    
+####Standards
+
+    flow mean
+    flow sd
+    bkt biomass mean
+    bkt biomass sd
+    
+####Data Inputs
+
+    river
+    hourlyTemp
+    startLength
+    seasonalFlow
+    bktBiomass
+
+###2. Movement
+####Parameters
+
+    transition matrix by season, river
+    
+####Data Inputs
+
+    river
+    season
+    
+###3. Survival
+####Parameters
+
+    beta matrix (intercept,flow,temp,temp*flow,length x river)
+    
+####Standards
+
+    flow mean
+    flow sd
+    temp mean
+    temp sd
+    
+####Data Inputs
+
+    river
+    daily flow
+    daily temp
+    length
+    
+###4. Reproduction
+####Parameters
+
+    env betas
+    density betas
+    
+####Data Inputs
+    
+    eggs
+    env
+    density
+    
