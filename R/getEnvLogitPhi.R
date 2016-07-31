@@ -1,3 +1,15 @@
+#' Estimates the environmental part of survival by estimating daily survival,
+#' obtaining the product on the real scale,
+#' and converting back to the logit scale so it can be combined with length effects
+#'@param nSamples Scalar number of samples
+#'@param nDays Scalar number of days in study/simulation period
+#'@param sampleDays Vector of days on which samples were taken
+#'@param phiBeta array of parameters from survival model
+#'@param nRivers how many rivers?
+#'@param nStages how many stages?
+#'
+#'@export
+
 
 getEnvLogitPhi<-function(nSamples,nDays,sampleDays,phiBeta,nRivers=4,nStages=2){
     #create array of predicted daily logit survival based only on flow and temp

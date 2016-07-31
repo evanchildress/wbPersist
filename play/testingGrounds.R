@@ -1,4 +1,6 @@
 library(wbPersist)
+library(dplyr)
+library(data.table)
 
 nRivers<-4
 nStages<-2
@@ -96,7 +98,6 @@ core<-data.table(river="west brook",season=3,
 envLogitPhi<-getEnvLogitPhi(nSamples,nDays,sampleDays,phiBeta)
 growthPerformance<-getGrowthPerformance(sampleHours,
                                         hourlyTemp,
-                                        nRivers,
                                         growthPars)
 
 ################################################################
