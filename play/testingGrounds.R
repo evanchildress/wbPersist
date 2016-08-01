@@ -1,10 +1,14 @@
 library(wbPersist)
 library(dplyr)
 library(data.table)
+library(getWBData)
+library(reshape2)
+
+
 
 nRivers<-4
 nStages<-2
-nYears<-20
+nYears<-17
 nDays<-365*nYears
 nSamples<-nYears*4
 season<-rep(c(3,4,1,2),nYears)
@@ -15,7 +19,7 @@ season<-rep(c(3,4,1,2),nYears)
 sampleDays<-round(seq(1,nDays,length.out=nSamples))
 sampleHours<-round(seq(1,nDays*24,length.out=nSamples))
 #river specific daily environmental variables
-hourlyTemp<-runif(nDays*24,8,15) %>%
+hourlyTemp<-runif(nDays*24,0,10) %>%
   cbind(.,.,.,.) %>%
   data.table() %>%
   .[,day:=rep(1:nDays,each=24)] %>%
@@ -28,6 +32,21 @@ dailyTemp<-hourlyTemp[,.(max(wb),
                       by=day] %>%
   .[,.(V1,V2,V3,V4)] %>%
   as.matrix()
+
+hourlyTemp<-tbl(conDplyr,"data_hourly_temperature") %>%
+            collect(n=Inf) %>%
+            data.table() %>%
+            .[datetime>as.POSIXct("1999-01-01 00:00:00")] %>%
+            .[,.(datetime,temperature,river)] %>%
+            .[!duplicated(.[,.(datetime,river)])]
+
+dailyTemp<-hourlyTemp[,.(temperature=max(temperature)),by=.(date=as.Date(datetime),river)] %>%
+            melt(id.vars=c("river","date")) %>%
+            acast(date~river) %>%
+            .[1:nDays,]
+
+hourlyTemp<-melt(hourlyTemp,id.vars=c("river","datetime")) %>%
+            acast(datetime~river)
 
 dailyFlow<-rnorm(nDays,0,1) %>%
   cbind(.,.,.,.) %>%
@@ -44,7 +63,7 @@ seasonalFlow<-dailyFlow[,.(mean(wb),
   .[,.(V1,V2,V3,V4)] %>%
   as.matrix()
 
-hourlyTemp<-as.matrix(hourlyTemp[,.(wb,jimmy,mitchell,obear)])
+#hourlyTemp<-as.matrix(hourlyTemp[,.(wb,jimmy,mitchell,obear)])
 dailyFlow<-as.matrix(dailyFlow[,.(wb,jimmy,mitchell,obear)])
 
 #################################################################################
@@ -52,14 +71,14 @@ dailyFlow<-as.matrix(dailyFlow[,.(wb,jimmy,mitchell,obear)])
 #################################################################################
 
 #betas from survival model
-phiBeta<-array( c(6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60,
-                  6,-1,-1,1,-1/60),
+phiBeta<-array( c(5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300,
+                  5,-1,-1,1,-1/300),
                 dim=c(5,4,2))
 
 
@@ -67,10 +86,10 @@ phiBeta<-array( c(6,-1,-1,1,-1/60,
 growthPars<-list(tOpt=c(13,13,13,13),
      ctMax=c(20,20,20,20),
      sigma=c(4,4,4,4),
-     betas=matrix(c(0.015,0.015,0.015,0.015,
-                    -0.0006,-0.0006,-0.0006,-0.0006,
-                    0.01,0.01,0.01,0.01,
-                  -0.05,-0.05,-0.05,-0.05),
+     betas=matrix(c(0.018,0.018,0.018,0.018,
+                    -0.00005,-0.00005,-0.00005,-0.00005,
+                    0.004,0.004,0.004,0.004,
+                  -0.002,-0.002,-0.002,-0.002),
                   nrow=4,ncol=4,byrow=T),
      eps=c(0.00049,0.00049,0.00049,0.00049))
 
@@ -80,16 +99,16 @@ moveProb<-movementProbs
 
 
 #
-# core<-createCoreData() %>%
-#       addTagProperties() %>%
-#       filter(species=="bkt") %>%
-#       addSampleProperties() %>%
-#       data.table()
-
-core<-data.table(river="west brook",season=3,
-                 observedLength=runif(1000,60,200)) %>%
-      .[,cohort:=ifelse(observedLength<95,1,2)] %>%
-      .[,year:=1]
+core<-createCoreData() %>%
+      addTagProperties() %>%
+      filter(species=="bkt") %>%
+      addSampleProperties() %>%
+      data.table()
+#
+# core<-data.table(river="west brook",season=3,
+#                  observedLength=runif(1000,60,200)) %>%
+#       .[,cohort:=ifelse(observedLength<95,1,2)] %>%
+#       .[,year:=1]
 
 ##################################################################
 #create structures that contain predictions that do not depend on individual traits
@@ -152,19 +171,21 @@ if(season[i]==3){
   eggs<-rep(as.integer(NA),4)
   eggPhi<-eggSurvive(dailyFlow,dailyTemp,1,1)
   for(r in 1:nRivers){
-    eggs[r]<-sum(spawn(L[alive,i-4][R[alive,i-4]==r]))
+    eggs[r]<-sum(spawn(L[alive,i-4][R[alive,i-4]==r & G[alive,i-4]==2]))
   }
   nYoy<-rbinom(nRivers,eggs,eggPhi)
-  A[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
-  R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-rep(1:4,nYoy)
-  G[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
-  L[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-recruitLength(R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i],
-                                                                 seasonalFlow,
-                                                                 dailyTemp,
-                                                                 1)
-  maxIndexAlive<-maxIndexAlive+sum(nYoy)
-  alive<-which(A[,i]==1)
-}
+  if(sum(nYoy)>0){
+    A[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
+    R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-rep(1:4,nYoy)
+    G[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
+    L[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-recruitLength(R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i],
+                                                                   seasonalFlow,
+                                                                   dailyTemp,
+                                                                   1)
+    maxIndexAlive<-maxIndexAlive+sum(nYoy)
+    alive<-which(A[,i]==1)
+    }
+  }
 }
 #need to add the right number of YOY to the bottom of A and loop
 

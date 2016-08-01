@@ -23,8 +23,8 @@ NumericVector survive(NumericVector river,
   NumericVector phi(n);
 
   for(int i = 0; i<n; ++i){
-    logitPhi[i] = envLogitPhi(river[i],stage[i]) +
-                  phiBeta5(river[i],stage[i])*forkLength[i];
+    logitPhi[i] = envLogitPhi(river[i]-1,stage[i]-1) +
+                  phiBeta5(river[i]-1,stage[i]-1)*forkLength[i];
   }
 
   phi = 1/(1+exp(-logitPhi));

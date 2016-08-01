@@ -22,11 +22,11 @@ NumericVector grow(NumericMatrix pars,
   NumericVector endLength(n);
   for(int i = 0; i<n; ++i) {
     endLength[i] = startLength[i] +
-                   (pars(1,river[i]) +
-                      pars(2,river[i])*startLength[i] +
-                      pars(3,river[i])*flow[river[i]] +
-                      pars(4,river[i])*biomass[river[i]])*
-                   performance[i];
+                   (pars(0,river[i]-1) +
+                      pars(1,river[i]-1)*startLength[i] +
+                      pars(2,river[i]-1)*flow[river[i]-1] +
+                      pars(3,river[i]-1)*biomass[river[i]-1])*
+                   performance[river[i]-1];
   }
   return endLength;
 }
