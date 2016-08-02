@@ -148,7 +148,8 @@ R[1:initN,1]<-1
 
 alive<-which(A[,1]==1)
 
-for(i in 2:5){
+for(i in 2:nSamples){
+alive<-which(A[,i-1]==1)
 phi<-survive(R[alive,i-1],G[alive,i-1],L[alive,i-1],phiBeta[5,,],envLogitPhi[1,,])
 
 #who survives?
@@ -157,20 +158,20 @@ A[alive,i]<-rbinom(length(alive),1,phi)
 #grow, change stages, and move, if you survived
 alive<-which(A[,i]==1)
 if(length(alive)==0) break
-L[alive,i]<-grow(growthPars$betas,R[alive,i-1],L[alive,i-1],
-                 seasonalFlow[i-1,],rep(0,length(alive)),
+aliveNotRecruit<-alive[is.na(L[alive,i])]
+L[aliveNotRecruit,i]<-grow(growthPars$betas,R[aliveNotRecruit,i-1],L[aliveNotRecruit,i-1],
+                 seasonalFlow[i-1,],rep(0,length(aliveNotRecruit)),
                  growthPerformance[i-1,])
-G[alive,i]<-stageTransition(G[alive,i-1],season[i-1])
+G[aliveNotRecruit,i]<-stageTransition(G[aliveNotRecruit,i-1],season[i-1])
 
-R[alive,i]<-move(getMoveProb(R[alive,i-1],moveProb[,,season[i-1]]))
+R[aliveNotRecruit,i]<-move(getMoveProb(R[aliveNotRecruit,i-1],moveProb[,,season[i-1]]))
 
 #reproduce if it's the right season
 
 
-if(season[i]==3){
+if(season[i]==3 & (i+4)<nSamples){
   eggs<-rep(as.integer(NA),4)
   eggPhi<-eggSurvive(dailyFlow,dailyTemp,1,1)
-  #spawning needs to happen in fall! otherwise alive is wrong, so eggs that survive should do that during fall by looking ahead then survive with probability 1 until next fall to save space used by eggs
   eggs<-spawn(L[alive,i][G[alive,i]==2],
                    R[alive,i][G[alive,i]==2]) %>%
         round()
@@ -186,10 +187,8 @@ if(season[i]==3){
                                                                    dailyTemp,
                                                                    1)
     maxIndexAlive<-maxIndexAlive+sum(nYoy)
-    alive<-which(A[,i]==1)
     }
   }
 }
-#need to add the right number of YOY to the bottom of A and loop
 
 N<-colSums(!is.na(L))
