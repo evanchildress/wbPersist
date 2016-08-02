@@ -3,5 +3,5 @@
 #'@export
 
 eggSurvive<-function(flow,temp,biomass,betas){
-  return(c(0.8,0.8,0.8,0.8))
+  return(c(0.05,0.05,0.05,0.05))
 }

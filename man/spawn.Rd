@@ -4,7 +4,7 @@
 \alias{spawn}
 \title{Returns number of eggs produced from fork lengths based on Letcher et al. 2007}
 \usage{
-spawn(forkLength)
+spawn(forkLength, river)
 }
 \arguments{
 \item{forkLength}{Vector of fork lengths to estimate fecundity for}

@@ -3,7 +3,7 @@ library(dplyr)
 library(data.table)
 library(getWBData)
 library(reshape2)
-
+reconnect()
 
 
 nRivers<-4
@@ -11,7 +11,7 @@ nStages<-2
 nYears<-17
 nDays<-365*nYears
 nSamples<-nYears*4
-season<-rep(c(3,4,1,2),nYears)
+season<-rep(c(2,3,4,1),nYears)
 
 ########################################################################
 #load in (or make up data)
@@ -148,7 +148,7 @@ R[1:initN,1]<-1
 
 alive<-which(A[,1]==1)
 
-for(i in 2:nSamples){
+for(i in 2:5){
 phi<-survive(R[alive,i-1],G[alive,i-1],L[alive,i-1],phiBeta[5,,],envLogitPhi[1,,])
 
 #who survives?
@@ -170,15 +170,18 @@ R[alive,i]<-move(getMoveProb(R[alive,i-1],moveProb[,,season[i-1]]))
 if(season[i]==3){
   eggs<-rep(as.integer(NA),4)
   eggPhi<-eggSurvive(dailyFlow,dailyTemp,1,1)
-  for(r in 1:nRivers){
-    eggs[r]<-sum(spawn(L[alive,i-4][R[alive,i-4]==r & G[alive,i-4]==2]))
-  }
+  #spawning needs to happen in fall! otherwise alive is wrong, so eggs that survive should do that during fall by looking ahead then survive with probability 1 until next fall to save space used by eggs
+  eggs<-spawn(L[alive,i][G[alive,i]==2],
+                   R[alive,i][G[alive,i]==2]) %>%
+        round()
+
+
   nYoy<-rbinom(nRivers,eggs,eggPhi)
   if(sum(nYoy)>0){
-    A[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
-    R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-rep(1:4,nYoy)
-    G[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-1
-    L[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i]<-recruitLength(R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i],
+    A[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i+4]<-1
+    R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i+4]<-rep(1:4,nYoy)
+    G[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i+4]<-1
+    L[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i+4]<-recruitLength(R[(maxIndexAlive+1):(maxIndexAlive+sum(nYoy)),i],
                                                                    seasonalFlow,
                                                                    dailyTemp,
                                                                    1)
