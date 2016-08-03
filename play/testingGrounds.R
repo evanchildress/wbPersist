@@ -81,24 +81,12 @@ phiBeta<-array( c(5,-1,-1,1,-1/300,
                   5,-1,-1,1,-1/300),
                 dim=c(5,4,2))
 
-
-#parameters from growth model
-growthPars<-list(tOpt=c(13,13,13,13),
-     ctMax=c(20,20,20,20),
-     sigma=c(4,4,4,4),
-     betas=matrix(c(0.018,0.018,0.018,0.018,
-                    -0.00005,-0.00005,-0.00005,-0.00005,
-                    0.004,0.004,0.004,0.004,
-                  -0.002,-0.002,-0.002,-0.002),
-                  nrow=4,ncol=4,byrow=T),
-     eps=c(0.00049,0.00049,0.00049,0.00049))
-
-
 #movement probabilities from Letcher et al. 2014
 moveProb<-movementProbs
 
+#growth parameters from growth model
+growthPars<-growthPars
 
-#
 core<-createCoreData() %>%
       addTagProperties() %>%
       filter(species=="bkt") %>%
@@ -159,6 +147,7 @@ A[alive,i]<-rbinom(length(alive),1,phi)
 alive<-which(A[,i]==1)
 if(length(alive)==0) break
 aliveNotRecruit<-alive[is.na(L[alive,i])]
+if(length(aliveNotRecruit)==0) next
 L[aliveNotRecruit,i]<-grow(growthPars$betas,R[aliveNotRecruit,i-1],L[aliveNotRecruit,i-1],
                  seasonalFlow[i-1,],rep(0,length(aliveNotRecruit)),
                  growthPerformance[i-1,])

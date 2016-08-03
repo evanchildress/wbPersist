@@ -4,7 +4,7 @@
 #' @export
 
 spawn<-function(forkLength,river){
-  streamLength<-c(47,17,14)
+  streamLength<-c(5421,715,390)
   streamLength<-streamLength/sum(streamLength)
 
   totalEggs<-0.00187*forkLength^2.19
