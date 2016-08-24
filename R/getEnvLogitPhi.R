@@ -27,7 +27,7 @@ getEnvLogitPhi<-function(nSamples,nDays,sampleDays,phiBeta,nRivers=4,nStages=2){
     for(r in 1:nRivers){
       for(g in 1:nStages){
         for(s in 1:nSamples){
-          envLogitPhi[s,r,g]<-prod(plogis(dailyLogitPhi[sampleDays[s]:(sampleDays[s]-1)]))
+          envLogitPhi[s,r,g]<-qlogis(prod(plogis(dailyLogitPhi[sampleDays[s]:(sampleDays[s]-1)])))
         }
       }
     }

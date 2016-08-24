@@ -43,7 +43,8 @@ hourlyTemp<-tbl(conDplyr,"data_hourly_temperature") %>%
 dailyTemp<-hourlyTemp[,.(temperature=max(temperature)),by=.(date=as.Date(datetime),river)] %>%
             melt(id.vars=c("river","date")) %>%
             acast(date~river) %>%
-            .[1:nDays,]
+            .[1:nDays,] %>%
+            apply(2,function(x){scale(x)[,1]})
 
 hourlyTemp<-melt(hourlyTemp,id.vars=c("river","datetime")) %>%
             acast(datetime~river)
@@ -71,16 +72,17 @@ dailyFlow<-as.matrix(dailyFlow[,.(wb,jimmy,mitchell,obear)])
 #################################################################################
 
 #betas from survival model
-phiBeta<-array( c(5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300,
-                  5,-1,-1,1,-1/300),
-                dim=c(5,4,2))
-
+# phiBeta<-array( c(5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300,
+#                   5,-1,-1,1,-1/300),
+#                 dim=c(5,4,2))
+phiBeta<-phiBeta #loaded with package, just doing this as a reminder
+phiBeta[5,,]<- -0.01
 #movement probabilities from Letcher et al. 2014
 moveProb<-movementProbs
 
@@ -138,7 +140,9 @@ alive<-which(A[,1]==1)
 
 for(i in 2:nSamples){
 alive<-which(A[,i-1]==1)
-phi<-survive(R[alive,i-1],G[alive,i-1],L[alive,i-1],phiBeta[5,,],envLogitPhi[1,,])
+phi<-survive(R[alive,i-1],G[alive,i-1],
+             (L[alive,i-1]-cjsStds$meanLength[R[alive,i-1]])/cjsStds$sdLength[R[alive,i-1]],
+             phiBeta[5,,],envLogitPhi[1,,])
 
 #who survives?
 A[alive,i]<-rbinom(length(alive),1,phi)
